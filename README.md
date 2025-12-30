@@ -16,12 +16,12 @@ npm run deploy
 No external UI libraries or CDN assets are used; once built, the `dist/` bundle runs offline.
 
 ## Gameplay flow
-- Lobby: 5–10 players, editable names/colors, pick or randomize the moderator.
-- Moderator picks a theme + secret word, generates cards.
-- One-at-a-time card reveals to show the word or the “FAKE ARTIST” card.
-- Drawing: each player gets exactly two strokes on the shared canvas using their color; undo/clear tools gated for the moderator.
-- Voting: public or private voting, dramatic reveal, moderator tie-break.
-- Reveal & scoring: fake’s guess if caught, scoreboard persists across rounds; buttons for next round, change moderator, or new game.
+- Lobby: 5–10 players, editable names/colors.
+- Choose a theme (word is randomized), generate cards.
+- One-at-a-time card reveals; everyone sees a word. One player secretly has a different word (the fake).
+- Drawing: each player gets exactly two strokes on the shared canvas using their color; undo once per round, clear available but discouraged.
+- Voting: public or private voting, dramatic reveal, tie-break selection.
+- Reveal & scoring: fake’s guess if caught, scoreboard persists across rounds; buttons for next round or new game.
 
 ## Notes
 - Built with Vite + React hooks; JSX and canvas for drawing.

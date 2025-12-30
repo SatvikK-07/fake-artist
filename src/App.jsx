@@ -34,13 +34,25 @@ const getPoint = (event, canvas) => {
   };
 };
 
+const pickRandomWord = (theme) => {
+  const words = WORDS[theme] || [];
+  if (!words.length) return '';
+  const idx = Math.floor(Math.random() * words.length);
+  return words[idx];
+};
+
+const pickDecoyWord = (theme, actual) => {
+  const words = (WORDS[theme] || []).filter((w) => w !== actual);
+  if (!words.length) return actual;
+  return words[Math.floor(Math.random() * words.length)];
+};
+
 export default function App() {
   const [players, setPlayers] = useState(() => Array.from({ length: MIN_PLAYERS }, (_, i) => createPlayer(i)));
   const idSuffix = useRef(100);
-  const [moderatorId, setModeratorId] = useState(() => `p-1`);
-  const [stage, setStage] = useState('lobby'); // lobby | moderator | cards | drawing | voting | results
+  const [stage, setStage] = useState('lobby'); // lobby | theme | cards | drawing | voting | results
   const [theme, setTheme] = useState(THEMES[0]);
-  const [word, setWord] = useState(WORDS[THEMES[0]][0]);
+  const [word, setWord] = useState('');
   const [fakeId, setFakeId] = useState(null);
   const [assignments, setAssignments] = useState({});
   const [revealIndex, setRevealIndex] = useState(0);
@@ -53,7 +65,7 @@ export default function App() {
   const [turn, setTurn] = useState(0);
   const [undoUsed, setUndoUsed] = useState(false);
 
-  const [votingMode, setVotingMode] = useState('public'); // public | private
+  const [votingMode, setVotingMode] = useState('private'); // public | private
   const [votes, setVotes] = useState({});
   const [voterIndex, setVoterIndex] = useState(0);
   const [voteReveal, setVoteReveal] = useState(false);
@@ -71,13 +83,6 @@ export default function App() {
   const currentPlayer = stage === 'drawing' && players.length ? players[turn % players.length] : null;
   const lineNumber = players.length ? Math.min(2, Math.floor(turn / players.length) + 1) : 1;
   const votesComplete = players.length > 0 && Object.keys(votes).length === players.length && Object.values(votes).every(Boolean);
-
-  useEffect(() => {
-    if (!players.length) return;
-    if (!players.find((p) => p.id === moderatorId)) {
-      setModeratorId(players[0].id);
-    }
-  }, [players, moderatorId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -136,28 +141,21 @@ export default function App() {
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, [key]: value } : p)));
   };
 
-  const randomizeModerator = () => {
-    if (!players.length) return;
-    const rand = players[Math.floor(Math.random() * players.length)];
-    setModeratorId(rand.id);
-  };
-
-  const startModeratorScreen = () => {
-    if (!moderatorId) {
-      randomizeModerator();
-    }
+  const startThemeScreen = () => {
     resetPerRoundState();
-    setWord((prev) => prev || WORDS[theme][0]);
-    setStage('moderator');
+    setStage('theme');
   };
 
   const generateCards = () => {
-    if (!word) return;
+    const randomWord = pickRandomWord(theme);
+    if (!randomWord) return;
+    setWord(randomWord);
     resetPerRoundState();
     const fakePick = players[Math.floor(Math.random() * players.length)];
     setFakeId(fakePick.id);
+    const decoy = pickDecoyWord(theme, randomWord);
     const assigned = players.reduce((acc, player) => {
-      acc[player.id] = player.id === fakePick.id ? 'FAKE' : word;
+      acc[player.id] = player.id === fakePick.id ? decoy : randomWord;
       return acc;
     }, {});
     setAssignments(assigned);
@@ -254,40 +252,40 @@ export default function App() {
   };
 
   const applyScoring = (guessCorrect = false) => {
-    if (scored || !fakeId || !moderatorId || !accusedId) return;
+    if (scored || !fakeId || !accusedId) return;
     const accusedIsFake = accusedId === fakeId;
     const updated = players.map((p) => {
       let delta = 0;
       if (accusedIsFake) {
         if (guessCorrect) {
-          if (p.id === fakeId || p.id === moderatorId) delta += 2;
+          if (p.id === fakeId) delta += 2;
         } else if (p.id !== fakeId) {
           delta += 1;
         }
       } else {
-        if (p.id === fakeId || p.id === moderatorId) delta += 2;
+        if (p.id === fakeId) delta += 2;
       }
       return { ...p, score: p.score + delta };
     });
     setPlayers(updated);
     if (accusedIsFake) {
-      setOutcome(guessCorrect ? 'Fake guessed correctly: +2 to Fake & Moderator' : 'Artists caught the Fake: +1 to everyone else');
+      setOutcome(guessCorrect ? 'Fake guessed correctly: +2 to Fake' : 'Artists caught the Fake: +1 to everyone else');
     } else {
-      setOutcome('Group missed: +2 to Fake & Moderator');
+      setOutcome('Group missed: +2 to Fake');
     }
     setScored(true);
   };
 
   useEffect(() => {
-    if (stage === 'results' && accusedId && fakeId && moderatorId && accusedId !== fakeId && !scored) {
+    if (stage === 'results' && accusedId && fakeId && accusedId !== fakeId && !scored) {
       applyScoring(false);
       setWordRevealed(true);
       setResultDialog({
         word,
-        message: 'Group missed. Fake Artist & Moderator earn +2.',
+        message: 'Group missed. Fake Artist earns +2.',
       });
     }
-  }, [stage, accusedId, fakeId, moderatorId, scored, word]);
+  }, [stage, accusedId, fakeId, scored, word]);
 
   const handleGuessSubmit = () => {
     const correct = fakeGuess.trim().toLowerCase() === (word || '').trim().toLowerCase();
@@ -295,7 +293,7 @@ export default function App() {
     setWordRevealed(true);
     setResultDialog({
       word,
-      message: correct ? 'Fake guessed correctly! +2 to Fake & Moderator.' : 'Fake guessed wrong. +1 to everyone else.',
+      message: correct ? 'Fake guessed correctly! +2 to Fake.' : 'Fake guessed wrong. +1 to everyone else.',
     });
   };
 
@@ -315,14 +313,12 @@ export default function App() {
     setAssignments({});
     setRevealIndex(0);
     setCardRevealed(false);
-    setStage(goToLobby ? 'lobby' : 'moderator');
-    setWord(WORDS[theme][0]);
+    setStage(goToLobby ? 'lobby' : 'theme');
+    setWord('');
   };
 
   const accusedPlayer = useMemo(() => players.find((p) => p.id === accusedId), [players, accusedId]);
   const fakePlayer = useMemo(() => players.find((p) => p.id === fakeId), [players, fakeId]);
-  const moderator = useMemo(() => players.find((p) => p.id === moderatorId), [players, moderatorId]);
-
   return (
     <div className="app">
       <header className="app-header">
@@ -333,48 +329,31 @@ export default function App() {
         </div>
         <div className="status-block">
           <div>Round {round}</div>
-          <div className="tiny-label">Moderator</div>
-          <div className="moderator-name" style={{ color: moderator?.color || '#fff' }}>
-            {moderator?.name || 'Pick one'}
-          </div>
+          <div className="tiny-label">Theme</div>
+          <div className="status-value">{theme}</div>
         </div>
       </header>
 
       <div className="layout">
         <section className="content">
-          {stage === 'lobby' && (
-            <Lobby
-              players={players}
-              moderatorId={moderatorId}
-              onModeratorChange={setModeratorId}
-              randomizeModerator={randomizeModerator}
-              onPlayerCountChange={handlePlayerCountChange}
-              onPlayerFieldChange={handlePlayerFieldChange}
-              onStart={startModeratorScreen}
-            />
-          )}
+        {stage === 'lobby' && (
+          <Lobby
+            players={players}
+            onPlayerCountChange={handlePlayerCountChange}
+            onPlayerFieldChange={handlePlayerFieldChange}
+            onStart={startThemeScreen}
+          />
+        )}
 
-          {stage === 'moderator' && (
-            <ModeratorScreen
-              theme={theme}
-              word={word}
-              themes={THEMES}
-              wordsByTheme={WORDS}
-              moderator={moderator}
-              onThemeChange={(t) => {
-                setTheme(t);
-                setWord(WORDS[t][0]);
-              }}
-              onWordChange={setWord}
-              onRandomWord={() => {
-                const options = WORDS[theme];
-                const choice = options[Math.floor(Math.random() * options.length)];
-                setWord(choice);
-              }}
-              onGenerate={generateCards}
-              onBack={() => setStage('lobby')}
-            />
-          )}
+        {stage === 'theme' && (
+          <ThemeScreen
+            theme={theme}
+            themes={THEMES}
+            onThemeChange={(t) => setTheme(t)}
+            onGenerate={generateCards}
+            onBack={() => setStage('lobby')}
+          />
+        )}
 
           {stage === 'cards' && (
             <CardReveal
@@ -409,7 +388,6 @@ export default function App() {
               onUndo={handleUndo}
               onClear={handleClear}
               undoUsed={undoUsed}
-              moderator={moderator}
               players={players}
               onSkipToVote={() => setStage('voting')}
             />
@@ -437,7 +415,6 @@ export default function App() {
           {stage === 'results' && (
             <ResultScreen
               players={players}
-              moderator={moderator}
               fakePlayer={fakePlayer}
               accusedPlayer={accusedPlayer}
               word={word}
@@ -448,7 +425,6 @@ export default function App() {
               scored={scored}
               outcome={outcome}
               onNextRound={() => resetForNextRound(false, false)}
-              onChangeModerator={() => resetForNextRound(false, true)}
               onResetGame={() => resetForNextRound(true, true)}
               wordRevealed={wordRevealed}
               onRevealWord={() => setWordRevealed(true)}
@@ -466,21 +442,13 @@ export default function App() {
   );
 }
 
-function Lobby({
-  players,
-  moderatorId,
-  onModeratorChange,
-  randomizeModerator,
-  onPlayerCountChange,
-  onPlayerFieldChange,
-  onStart,
-}) {
+function Lobby({ players, onPlayerCountChange, onPlayerFieldChange, onStart }) {
   return (
     <div className="panel">
       <div className="panel-header">
         <div>
           <h2>Lobby</h2>
-          <p className="muted">Set names, pick a moderator, and jump in.</p>
+          <p className="muted">Set names, pick your colors, and jump in.</p>
         </div>
         <div className="inline-controls">
           <span className="tiny-label">Players</span>
@@ -519,23 +487,11 @@ function Lobby({
                 onChange={(e) => onPlayerFieldChange(player.id, 'color', e.target.value)}
               />
             </label>
-            <label className="radio">
-              <input
-                type="radio"
-                name="moderator"
-                checked={moderatorId === player.id}
-                onChange={() => onModeratorChange(player.id)}
-              />
-              <span>Moderator</span>
-            </label>
           </div>
         ))}
       </div>
 
       <div className="actions">
-        <button className="ghost" onClick={randomizeModerator}>
-          Random Moderator
-        </button>
         <button className="primary" onClick={onStart}>
           Start Round
         </button>
@@ -544,17 +500,13 @@ function Lobby({
   );
 }
 
-function ModeratorScreen({ theme, word, themes, wordsByTheme, moderator, onThemeChange, onWordChange, onRandomWord, onGenerate, onBack }) {
-  const themeWords = wordsByTheme[theme] || [];
+function ThemeScreen({ theme, themes, onThemeChange, onGenerate, onBack }) {
   return (
     <div className="panel">
       <div className="panel-header">
         <div>
-          <h2>You are the Moderator</h2>
-          <p className="muted">Pick a theme and word, then generate cards.</p>
-        </div>
-        <div className="badge" style={{ background: moderator?.color || '#1f2937' }}>
-          {moderator?.name || 'Unknown'}
+          <h2>Theme selection</h2>
+          <p className="muted">Pick a theme; a random word will be dealt to players.</p>
         </div>
       </div>
       <div className="form-grid">
@@ -566,18 +518,6 @@ function ModeratorScreen({ theme, word, themes, wordsByTheme, moderator, onTheme
             ))}
           </select>
         </label>
-
-        <label>
-          <span className="tiny-label">Word</span>
-          <select value={word} onChange={(e) => onWordChange(e.target.value)}>
-            {themeWords.map((w) => (
-              <option key={w}>{w}</option>
-            ))}
-          </select>
-        </label>
-        <button className="ghost full" onClick={onRandomWord}>
-          Random Word
-        </button>
       </div>
       <div className="actions">
         <button className="ghost" onClick={onBack}>
@@ -611,14 +551,8 @@ function CardReveal({ players, assignments, revealIndex, cardRevealed, onReveal,
             </button>
           ) : (
             <div className="card-face">
-              {assignments[currentPlayer.id] === 'FAKE' ? (
-                <div className="fake-callout">YOU ARE THE FAKE ARTIST</div>
-              ) : (
-                <div>
-                  <div className="tiny-label">Your word</div>
-                  <div className="word">{assignments[currentPlayer.id]}</div>
-                </div>
-              )}
+              <div className="tiny-label">Your word</div>
+              <div className="word">{assignments[currentPlayer.id]}</div>
             </div>
           )}
           <div className="actions">
@@ -658,7 +592,6 @@ function DrawingScreen({
   onUndo,
   onClear,
   undoUsed,
-  moderator,
   players,
   onSkipToVote,
 }) {
@@ -702,10 +635,10 @@ function DrawingScreen({
       </div>
       <div className="actions">
         <button className="ghost" onClick={onUndo} disabled={undoUsed || !strokes.length}>
-          Undo last stroke (mod only)
+          Undo last stroke (once)
         </button>
         <button className="ghost" onClick={onClear}>
-          Clear canvas (mod only)
+          Clear canvas (avoid unless needed)
         </button>
         <button className="primary" onClick={onSkipToVote} disabled={remaining > 0}>
           Go to Voting
@@ -816,7 +749,7 @@ function VotingScreen({
           </div>
           {tiesExist && (
             <div className="tie-break">
-              <p className="muted">Tie! Moderator chooses.</p>
+              <p className="muted">Tie! Choose who to accuse.</p>
               <div className="vote-grid">
                 {tieCandidates.map((id) => {
                   const player = players.find((p) => p.id === id);
@@ -845,7 +778,6 @@ function VotingScreen({
 
 function ResultScreen({
   players,
-  moderator,
   fakePlayer,
   accusedPlayer,
   word,
@@ -856,7 +788,6 @@ function ResultScreen({
   scored,
   outcome,
   onNextRound,
-  onChangeModerator,
   onResetGame,
   wordRevealed,
   onRevealWord,
@@ -908,7 +839,7 @@ function ResultScreen({
         </div>
       ) : (
         <div className="fake-guess">
-          <p className="muted">Group missed! Fake Artist and Moderator earn +2.</p>
+          <p className="muted">Group missed! Fake Artist earns +2.</p>
           {!wordRevealed && (
             <button className="ghost" onClick={onRevealWord} disabled={wordRevealed || scored}>
               Reveal word
@@ -920,9 +851,6 @@ function ResultScreen({
       {outcome && <div className="outcome">{outcome}</div>}
 
       <div className="actions">
-        <button className="ghost" onClick={onChangeModerator}>
-          Change Moderator
-        </button>
         <button className="primary" onClick={onNextRound}>
           Next Round
         </button>
@@ -930,7 +858,7 @@ function ResultScreen({
           New Game (reset scores)
         </button>
       </div>
-      <div className="muted">Scoring: Correct guess = +2 to Fake & Moderator. Wrong guess = +1 to everyone else.</div>
+      <div className="muted">Scoring: Correct guess = +2 to Fake. Wrong guess = +1 to everyone else.</div>
 
       {resultDialog && (
         <div className="modal-backdrop">
