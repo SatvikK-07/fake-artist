@@ -9,6 +9,8 @@ npm install
 npm run dev
 # build & serve static bundle
 npm run build && npm run preview
+# publish to GitHub Pages
+npm run deploy
 ```
 
 No external UI libraries or CDN assets are used; once built, the `dist/` bundle runs offline.
@@ -25,3 +27,9 @@ No external UI libraries or CDN assets are used; once built, the `dist/` bundle 
 - Built with Vite + React hooks; JSX and canvas for drawing.
 - CSS uses a custom palette and is tuned for laptop and mobile.
 - All words live in `src/words.js`; extend themes or lists as needed.
+
+## Deploy to GitHub Pages
+- Repo settings: ensure your repo is named `fake-artist` (or adjust `base` in `vite.config.js` to match the repo name).
+- Install deps: `npm install`
+- Deploy: `npm run deploy` (builds to `dist/` then publishes via `gh-pages` to the `gh-pages` branch)
+- On GitHub: Settings → Pages → Source → `Deploy from a branch`, pick `gh-pages` and root.
