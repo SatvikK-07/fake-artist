@@ -64,6 +64,8 @@ export default function App() {
   const [scored, setScored] = useState(false);
   const [outcome, setOutcome] = useState('');
   const [round, setRound] = useState(1);
+  const [wordRevealed, setWordRevealed] = useState(false);
+  const [resultDialog, setResultDialog] = useState(null);
 
   const totalStrokes = players.length * 2;
   const currentPlayer = stage === 'drawing' && players.length ? players[turn % players.length] : null;
@@ -82,7 +84,7 @@ export default function App() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#0f1115';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     strokes.forEach((stroke) => drawStroke(ctx, stroke.points, stroke.color));
     if (isDrawing && currentStroke.length > 1 && currentPlayer) {
@@ -110,6 +112,8 @@ export default function App() {
     setFakeGuess('');
     setScored(false);
     setOutcome('');
+    setWordRevealed(false);
+    setResultDialog(null);
   };
 
   const handlePlayerCountChange = (target) => {
@@ -274,12 +278,30 @@ export default function App() {
     setScored(true);
   };
 
+  useEffect(() => {
+    if (stage === 'results' && accusedId && fakeId && moderatorId && accusedId !== fakeId && !scored) {
+      applyScoring(false);
+      setWordRevealed(true);
+      setResultDialog({
+        word,
+        message: 'Group missed. Fake Artist & Moderator earn +2.',
+      });
+    }
+  }, [stage, accusedId, fakeId, moderatorId, scored, word]);
+
   const handleGuessSubmit = () => {
     const correct = fakeGuess.trim().toLowerCase() === (word || '').trim().toLowerCase();
     applyScoring(correct);
+    setWordRevealed(true);
+    setResultDialog({
+      word,
+      message: correct ? 'Fake guessed correctly! +2 to Fake & Moderator.' : 'Fake guessed wrong. +1 to everyone else.',
+    });
   };
 
   const proceedToReveal = () => {
+    setWordRevealed(accusedId !== fakeId);
+    setResultDialog(null);
     setStage('results');
   };
 
@@ -318,129 +340,128 @@ export default function App() {
         </div>
       </header>
 
-      <section className="content">
-        {stage === 'lobby' && (
-          <Lobby
-            players={players}
-            moderatorId={moderatorId}
-            onModeratorChange={setModeratorId}
-            randomizeModerator={randomizeModerator}
-            onPlayerCountChange={handlePlayerCountChange}
-            onPlayerFieldChange={handlePlayerFieldChange}
-            onStart={startModeratorScreen}
-          />
-        )}
+      <div className="layout">
+        <section className="content">
+          {stage === 'lobby' && (
+            <Lobby
+              players={players}
+              moderatorId={moderatorId}
+              onModeratorChange={setModeratorId}
+              randomizeModerator={randomizeModerator}
+              onPlayerCountChange={handlePlayerCountChange}
+              onPlayerFieldChange={handlePlayerFieldChange}
+              onStart={startModeratorScreen}
+            />
+          )}
 
-        {stage === 'moderator' && (
-          <ModeratorScreen
-            theme={theme}
-            word={word}
-            themes={THEMES}
-            wordsByTheme={WORDS}
-            moderator={moderator}
-            onThemeChange={(t) => {
-              setTheme(t);
-              setWord(WORDS[t][0]);
-            }}
-            onWordChange={setWord}
-            onRandomWord={() => {
-              const options = WORDS[theme];
-              const choice = options[Math.floor(Math.random() * options.length)];
-              setWord(choice);
-            }}
-            onGenerate={generateCards}
-            onBack={() => setStage('lobby')}
-          />
-        )}
+          {stage === 'moderator' && (
+            <ModeratorScreen
+              theme={theme}
+              word={word}
+              themes={THEMES}
+              wordsByTheme={WORDS}
+              moderator={moderator}
+              onThemeChange={(t) => {
+                setTheme(t);
+                setWord(WORDS[t][0]);
+              }}
+              onWordChange={setWord}
+              onRandomWord={() => {
+                const options = WORDS[theme];
+                const choice = options[Math.floor(Math.random() * options.length)];
+                setWord(choice);
+              }}
+              onGenerate={generateCards}
+              onBack={() => setStage('lobby')}
+            />
+          )}
 
-        {stage === 'cards' && (
-          <CardReveal
-            players={players}
-            assignments={assignments}
-            revealIndex={revealIndex}
-            cardRevealed={cardRevealed}
-            onReveal={() => setCardRevealed(true)}
-            onHide={() => setCardRevealed(false)}
-            onNext={() => {
-              setCardRevealed(false);
-              setRevealIndex((i) => i + 1);
-            }}
-            onBegin={beginDrawing}
-          />
-        )}
+          {stage === 'cards' && (
+            <CardReveal
+              players={players}
+              assignments={assignments}
+              revealIndex={revealIndex}
+              cardRevealed={cardRevealed}
+              onReveal={() => setCardRevealed(true)}
+              onHide={() => setCardRevealed(false)}
+              onNext={() => {
+                setCardRevealed(false);
+                setRevealIndex((i) => i + 1);
+              }}
+              onBegin={beginDrawing}
+            />
+          )}
 
-        {stage === 'drawing' && (
-          <DrawingScreen
-            theme={theme}
-            word={word}
-            round={round}
-            currentPlayer={currentPlayer}
-            lineNumber={lineNumber}
-            turn={turn}
-            totalStrokes={totalStrokes}
-            strokes={strokes}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            canvasRef={canvasRef}
-            onUndo={handleUndo}
-            onClear={handleClear}
-            undoUsed={undoUsed}
-            moderator={moderator}
-            players={players}
-            onSkipToVote={() => setStage('voting')}
-          />
-        )}
+          {stage === 'drawing' && (
+            <DrawingScreen
+              theme={theme}
+              word={word}
+              round={round}
+              currentPlayer={currentPlayer}
+              lineNumber={lineNumber}
+              turn={turn}
+              totalStrokes={totalStrokes}
+              strokes={strokes}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              canvasRef={canvasRef}
+              onUndo={handleUndo}
+              onClear={handleClear}
+              undoUsed={undoUsed}
+              moderator={moderator}
+              players={players}
+              onSkipToVote={() => setStage('voting')}
+            />
+          )}
 
-        {stage === 'voting' && (
-          <VotingScreen
-            players={players}
-            votes={votes}
-            votingMode={votingMode}
-            voterIndex={voterIndex}
-            voteReveal={voteReveal}
-            tieCandidates={tieCandidates}
-            accusedId={accusedId}
-            onModeToggle={() => setVotingMode((m) => (m === 'public' ? 'private' : 'public'))}
-            onPublicVote={handleVoteSelect}
-            onPrivateVote={handlePrivateVote}
-            onRevealVotes={revealVotes}
-            onAccuse={setAccusedId}
-            onResolve={proceedToReveal}
-            onBackToDraw={() => {
-              setStage('drawing');
-              setVoteReveal(false);
-              setVotes({});
-              setAccusedId(null);
-              setTieCandidates([]);
-              setVoterIndex(0);
-            }}
-            votesComplete={votesComplete}
-          />
-        )}
+          {stage === 'voting' && (
+            <VotingScreen
+              players={players}
+              votes={votes}
+              votingMode={votingMode}
+              voterIndex={voterIndex}
+              voteReveal={voteReveal}
+              tieCandidates={tieCandidates}
+              accusedId={accusedId}
+              onModeToggle={() => setVotingMode((m) => (m === 'public' ? 'private' : 'public'))}
+              onPublicVote={handleVoteSelect}
+              onPrivateVote={handlePrivateVote}
+              onRevealVotes={revealVotes}
+              onAccuse={setAccusedId}
+              onResolve={proceedToReveal}
+              votesComplete={votesComplete}
+            />
+          )}
 
-        {stage === 'results' && (
-          <ResultScreen
-            players={players}
-            moderator={moderator}
-            fakePlayer={fakePlayer}
-            accusedPlayer={accusedPlayer}
-            word={word}
-            fakeGuess={fakeGuess}
-            onGuessChange={setFakeGuess}
-            onGuessSubmit={handleGuessSubmit}
-            accusedIsFake={accusedId === fakeId}
-            scored={scored}
-            applyAutoScore={() => applyScoring(false)}
-            outcome={outcome}
-            onNextRound={() => resetForNextRound(false, false)}
-            onChangeModerator={() => resetForNextRound(false, true)}
-            onResetGame={() => resetForNextRound(true, true)}
-          />
-        )}
-      </section>
+          {stage === 'results' && (
+            <ResultScreen
+              players={players}
+              moderator={moderator}
+              fakePlayer={fakePlayer}
+              accusedPlayer={accusedPlayer}
+              word={word}
+              fakeGuess={fakeGuess}
+              onGuessChange={setFakeGuess}
+              onGuessSubmit={handleGuessSubmit}
+              accusedIsFake={accusedId === fakeId}
+              scored={scored}
+              outcome={outcome}
+              onNextRound={() => resetForNextRound(false, false)}
+              onChangeModerator={() => resetForNextRound(false, true)}
+              onResetGame={() => resetForNextRound(true, true)}
+              wordRevealed={wordRevealed}
+              onRevealWord={() => setWordRevealed(true)}
+              resultDialog={resultDialog}
+              onDismissDialog={() => setResultDialog(null)}
+            />
+          )}
+        </section>
 
-      <ScoreTable players={players} />
+        <aside className="sidebar">
+          <ScoreTable players={players} />
+        </aside>
+      </div>
     </div>
   );
 }
@@ -668,8 +689,8 @@ function DrawingScreen({
       <div className="canvas-wrapper">
         <canvas
           ref={canvasRef}
-          width={960}
-          height={600}
+          width={820}
+          height={500}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -715,7 +736,6 @@ function VotingScreen({
   onRevealVotes,
   onAccuse,
   onResolve,
-  onBackToDraw,
   votesComplete,
 }) {
   const tally = players.reduce((acc, p) => ({ ...acc, [p.id]: 0 }), {});
@@ -779,9 +799,6 @@ function VotingScreen({
       )}
 
       <div className="actions">
-        <button className="ghost" onClick={onBackToDraw}>
-          Back to Drawing
-        </button>
         <button className="primary" disabled={!votesComplete} onClick={onRevealVotes}>
           Reveal votes
         </button>
@@ -837,11 +854,14 @@ function ResultScreen({
   onGuessSubmit,
   accusedIsFake,
   scored,
-  applyAutoScore,
   outcome,
   onNextRound,
   onChangeModerator,
   onResetGame,
+  wordRevealed,
+  onRevealWord,
+  resultDialog,
+  onDismissDialog,
 }) {
   return (
     <div className="panel">
@@ -866,7 +886,7 @@ function ResultScreen({
         </div>
         <div className="badge-row">
           <span className="tiny-label">Secret word</span>
-          <div className="badge solid">{word}</div>
+          {wordRevealed ? <div className="badge solid">{word}</div> : <div className="badge muted-badge">Hidden until guess is submitted</div>}
         </div>
       </div>
 
@@ -884,13 +904,16 @@ function ResultScreen({
               Submit guess
             </button>
           </div>
+          {!wordRevealed && <p className="muted tiny">Word will be revealed after the guess.</p>}
         </div>
       ) : (
         <div className="fake-guess">
           <p className="muted">Group missed! Fake Artist and Moderator earn +2.</p>
-          <button className="primary" onClick={applyAutoScore} disabled={scored}>
-            Apply scoring
-          </button>
+          {!wordRevealed && (
+            <button className="ghost" onClick={onRevealWord} disabled={wordRevealed || scored}>
+              Reveal word
+            </button>
+          )}
         </div>
       )}
 
@@ -908,6 +931,20 @@ function ResultScreen({
         </button>
       </div>
       <div className="muted">Scoring: Correct guess = +2 to Fake & Moderator. Wrong guess = +1 to everyone else.</div>
+
+      {resultDialog && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h3>Round Result</h3>
+            <p className="tiny-label">Secret word</p>
+            <div className="badge solid">{resultDialog.word}</div>
+            <p className="muted">{resultDialog.message}</p>
+            <button className="primary" onClick={onDismissDialog}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
